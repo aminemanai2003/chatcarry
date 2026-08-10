@@ -1,0 +1,30 @@
+.manualConnect {
+  margin: 8px 16px 0;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #e3e5ee;
+  border-radius: 12px;
+}
+
+.manualConnect > span {
+  display: block;
+  margin-bottom: 7px;
+  color: #7d8495;
+  font-size: 9px;
+}
+
+.manualConnect > div {
+  display: flex;
+  gap: 6px;
+}
+
+.manualConnect button {
+  flex: 1;
+  padding: 7px 4px;
+  border: 1px solid #dcdcfa;
+  border-radius: 8px;
+  background: #ececff;
+  color: #4b4baa;
+  font: 700 9px inherit;
+  cursor: pointer;
+}

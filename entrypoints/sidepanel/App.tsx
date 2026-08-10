@@ -89,11 +89,12 @@ export function App() {
   useEffect(() => { if (view === 'library') void refreshCards(); }, [view]);
   useEffect(() => { if (view === 'enhance' && prompt) setEnhanced(enhancePrompt(prompt, preset)); }, [preset]);
 
-  async function connect() {
-    if (!platform || tabId == null) return;
-    const granted = await browser.permissions.request({ origins: [originPattern(platform, tabUrl)] });
+  async function connect(targetPlatform: PlatformId | null = platform, targetUrl = tabUrl) {
+    if (!targetPlatform || tabId == null) return;
+    const granted = await browser.permissions.request({ origins: [originPattern(targetPlatform, targetUrl)] });
     if (!granted) { setNotice({ tone: 'error', text: 'Site access was not granted.' }); return; }
     await browser.runtime.sendMessage({ type: 'ENSURE_BRIDGE', tabId });
+    setPlatform(targetPlatform);
     setConnected(true);
     setNotice({ tone: 'ok', text: 'Connected. ChatCarry only runs when you use it.' });
   }
@@ -197,8 +198,13 @@ export function App() {
 
     <div className={`siteStatus ${connected ? 'isConnected' : ''}`}>
       <span className="statusDot"/><div><strong>{platform ? `${platform.charAt(0).toUpperCase()}${platform.slice(1)}` : 'Unsupported page'}</strong><small>{connected ? 'Connected for this site' : tabTitle}</small></div>
-      {platform && (connected ? <button className="textButton" onClick={disconnect}><Unplug size={14}/> Remove</button> : <button className="textButton" onClick={connect}>Connect</button>)}
+      {platform && (connected ? <button className="textButton" onClick={disconnect}><Unplug size={14}/> Remove</button> : <button className="textButton" onClick={() => connect()}>Connect</button>)}
     </div>
+    {!platform && <div className="manualConnect"><span>Connect the site manually:</span><div>
+      <button onClick={() => connect('chatgpt', 'https://chatgpt.com/')}>ChatGPT</button>
+      <button onClick={() => connect('claude', 'https://claude.ai/')}>Claude</button>
+      <button onClick={() => connect('gemini', 'https://gemini.google.com/')}>Gemini</button>
+    </div></div>}
 
     {notice && <div className={`notice ${notice.tone}`}><span>{notice.tone === 'ok' ? <Check size={16}/> : '!'}</span>{notice.text}</div>}
 

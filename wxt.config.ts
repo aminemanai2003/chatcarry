@@ -7,7 +7,7 @@ export default defineConfig({
     short_name: 'ChatCarry',
     description: 'Save, refine, and carry conversation context between AI chats.',
     minimum_chrome_version: '116',
-    permissions: ['storage', 'sidePanel', 'scripting', 'activeTab'],
+    permissions: ['storage', 'sidePanel', 'scripting', 'tabs'],
     optional_host_permissions: [
       'https://chatgpt.com/*',
       'https://chat.openai.com/*',
