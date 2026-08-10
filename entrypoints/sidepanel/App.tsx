@@ -43,6 +43,7 @@ export function App() {
   const [platform, setPlatform] = useState<PlatformId | null>(null);
   const [connected, setConnected] = useState(false);
   const [tabId, setTabId] = useState<number | null>(null);
+  const [tabUrl, setTabUrl] = useState('');
   const [tabTitle, setTabTitle] = useState('Current AI chat');
   const [notice, setNotice] = useState<Notice>(null);
   const [busy, setBusy] = useState(false);
@@ -64,9 +65,10 @@ export function App() {
     const detected = platformFromUrl(tab?.url ?? '');
     setPlatform(detected);
     setTabId(tab?.id ?? null);
+    setTabUrl(tab?.url ?? '');
     setTabTitle(tab?.title ?? 'Current AI chat');
     if (!detected) { setConnected(false); return; }
-    const allowed = await browser.permissions.contains({ origins: [originPattern(detected)] });
+    const allowed = await browser.permissions.contains({ origins: [originPattern(detected, tab?.url)] });
     setConnected(allowed);
     if (allowed && tab?.id) await browser.runtime.sendMessage({ type: 'ENSURE_BRIDGE', tabId: tab.id });
   }
@@ -89,7 +91,7 @@ export function App() {
 
   async function connect() {
     if (!platform || tabId == null) return;
-    const granted = await browser.permissions.request({ origins: [originPattern(platform)] });
+    const granted = await browser.permissions.request({ origins: [originPattern(platform, tabUrl)] });
     if (!granted) { setNotice({ tone: 'error', text: 'Site access was not granted.' }); return; }
     await browser.runtime.sendMessage({ type: 'ENSURE_BRIDGE', tabId });
     setConnected(true);
@@ -98,7 +100,7 @@ export function App() {
 
   async function disconnect() {
     if (!platform) return;
-    await browser.permissions.remove({ origins: [originPattern(platform)] });
+    await browser.permissions.remove({ origins: [originPattern(platform, tabUrl)] });
     setConnected(false);
     setNotice({ tone: 'ok', text: 'Site access removed.' });
   }

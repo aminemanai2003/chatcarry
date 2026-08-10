@@ -20,7 +20,7 @@ const roleFromText = (value: string | null): ConversationMessage['role'] => {
 export const adapters: Record<PlatformId, AdapterDefinition> = {
   chatgpt: {
     id: 'chatgpt',
-    hosts: ['chatgpt.com'],
+    hosts: ['chatgpt.com', 'chat.openai.com'],
     messageSelectors: ['[data-message-author-role]'],
     composerSelectors: ['#prompt-textarea', 'textarea[data-id="root"]'],
     roleFor: (el) => roleFromText(el.getAttribute('data-message-author-role'))
@@ -51,12 +51,18 @@ export const adapters: Record<PlatformId, AdapterDefinition> = {
 export function platformFromUrl(url: string): PlatformId | null {
   try {
     const hostname = new URL(url).hostname;
-    return (Object.values(adapters).find((adapter) => adapter.hosts.includes(hostname))?.id) ?? null;
+    return (Object.values(adapters).find((adapter) => adapter.hosts.some((host) => hostname === host || hostname.endsWith(`.${host}`)))?.id) ?? null;
   } catch {
     return null;
   }
 }
 
-export function originPattern(platform: PlatformId): string {
+export function originPattern(platform: PlatformId, currentUrl?: string): string {
+  if (currentUrl) {
+    try {
+      const hostname = new URL(currentUrl).hostname;
+      if (adapters[platform].hosts.some((host) => hostname === host || hostname.endsWith(`.${host}`))) return `https://${hostname}/*`;
+    } catch { /* Fall back to the primary host. */ }
+  }
   return `https://${adapters[platform].hosts[0]}/*`;
 }

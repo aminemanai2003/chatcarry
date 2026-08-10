@@ -1,4 +1,5 @@
 import { adapters, platformFromUrl } from '../src/platforms';
+import { enhancePrompt } from '../src/context-engine';
 import { safeHttpUrl } from '../src/security';
 import type { Artifact, BridgeRequest, ConversationMessage, ConversationSnapshot, Result } from '../src/types';
 
@@ -91,21 +92,132 @@ function toast(message: string, undo = false) {
   window.setTimeout(() => node.remove(), 10_000);
 }
 
+function insertIntoComposer(text: string, mode: 'prepend' | 'replace') {
+  const element = composer();
+  if (!element) return fail('INSERT_FAILED', 'Could not find the prompt box.');
+  const original = currentValue(element);
+  previousDraft = { element, value: original, isInput: element instanceof HTMLTextAreaElement };
+  const separator = original.trim() ? '\n\n---\n\n' : '';
+  setValue(element, mode === 'replace' ? text : `${text}${separator}${original}`);
+  if (undoTimer) clearTimeout(undoTimer);
+  undoTimer = window.setTimeout(() => { previousDraft = null; }, 10_000);
+  toast('Inserted — review before sending.', true);
+  return { ok: true, value: { inserted: true } } as const;
+}
+
 function installDock() {
   if (document.getElementById('chatcarry-dock-host')) return;
   const host = document.createElement('div');
   host.id = 'chatcarry-dock-host';
-  Object.assign(host.style, { position: 'fixed', right: '20px', bottom: '20px', zIndex: '2147483646' });
+  Object.assign(host.style, { position: 'fixed', zIndex: '2147483646', opacity: '0', transition: 'opacity .18s ease' });
   const shadow = host.attachShadow({ mode: 'open' });
   shadow.innerHTML = `<style>
-    *{box-sizing:border-box} .dock{display:flex;gap:8px;padding:8px;background:#fff;border:1px solid #d9def0;border-radius:16px;box-shadow:0 16px 44px #1720332d;font:600 13px system-ui;color:#172033}
-    button{border:0;border-radius:10px;padding:10px 12px;background:#f1f2f8;color:inherit;cursor:pointer}button:first-child{background:#5b5bd6;color:#fff}button:hover{filter:brightness(.97)}
-    .mark{width:38px;height:38px;display:grid;place-items:center;border-radius:11px;background:#ececff;color:#5b5bd6;font-size:19px}
-  </style><div class="dock"><span class="mark">↗</span><button data-intent="save">Save context</button><button data-intent="load">Load</button><button data-intent="enhance">Enhance</button></div>`;
-  shadow.querySelectorAll<HTMLButtonElement>('button').forEach((button) => button.onclick = () => {
-    void chrome.runtime.sendMessage({ type: 'OPEN_PANEL', intent: button.dataset.intent });
+    :host{--cc-bg:#11131a;--cc-card:#181b24;--cc-line:#303545;--cc-text:#f6f7fb;--cc-muted:#9aa3b8;--cc-brand:#6464e8;--cc-soft:#292955;font:600 13px Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--cc-text)}
+    :host([data-theme="light"]){--cc-bg:#fff;--cc-card:#f6f7fb;--cc-line:#dfe3ee;--cc-text:#172033;--cc-muted:#6f778a;--cc-soft:#ececff}
+    *{box-sizing:border-box}.dock{display:flex;justify-content:flex-end;align-items:center;gap:9px}.orb,.enhance{border:1px solid #7777ef;background:linear-gradient(135deg,#5145cd,#7449b4);color:#fff;box-shadow:0 10px 28px #29225d59;cursor:pointer}
+    .orb{width:47px;height:47px;padding:0;border-radius:50%;display:grid;place-items:center}.orb svg{width:25px;height:25px}.enhance{height:47px;padding:0 20px;border-radius:24px;font:750 14px inherit;letter-spacing:.01em}.enhance span{color:#ffd15c;margin-right:7px}.orb:hover,.enhance:hover{filter:brightness(1.09);transform:translateY(-1px)}
+    .panel{position:absolute;right:0;bottom:58px;width:min(330px,calc(100vw - 24px));max-height:min(480px,70vh);overflow:auto;padding:14px;background:var(--cc-bg);border:1px solid var(--cc-line);border-radius:18px;box-shadow:0 22px 60px #0007}.panel[hidden],.view[hidden]{display:none}
+    .head{display:flex;align-items:center;justify-content:space-between;padding:0 2px 11px;border-bottom:1px solid var(--cc-line)}.head strong{font-size:12px;letter-spacing:.1em}.close,.back{border:0;background:transparent;color:var(--cc-muted);cursor:pointer;font-size:18px;padding:2px 5px}.back{font-size:12px;font-weight:700}
+    .actions{display:grid;gap:9px;padding-top:12px}.action{display:flex;align-items:center;gap:11px;width:100%;padding:12px;border:1px solid var(--cc-line);border-radius:13px;background:var(--cc-card);color:var(--cc-text);cursor:pointer;text-align:left}.action.primary{background:linear-gradient(100deg,#5265eb,#8b61bc);border-color:transparent;color:#fff}.action:hover{filter:brightness(1.06)}.action .icon{width:32px;height:32px;border-radius:9px;background:#ffffff18;display:grid;place-items:center;font-size:17px}.copy{flex:1}.copy strong,.copy small{display:block}.copy small{font-size:10px;color:var(--cc-muted);margin-top:2px}.primary .copy small{color:#e6e8ff}
+    .status{min-height:18px;margin:9px 2px 0;color:var(--cc-muted);font-size:10px;line-height:1.4}.status.error{color:#ff8d86}.cards{display:grid;gap:7px;margin-top:10px}.card{width:100%;border:1px solid var(--cc-line);border-radius:11px;background:var(--cc-card);color:var(--cc-text);padding:10px;text-align:left;cursor:pointer}.card:hover{border-color:#7777e9}.card strong,.card small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.card strong{font-size:11px}.card small{font-size:9px;color:var(--cc-muted);margin-top:3px}.empty{padding:24px 8px;text-align:center;color:var(--cc-muted);font-size:11px}
+    .presets{display:flex;gap:5px;margin:11px 0 8px}.preset{flex:1;padding:7px 4px;border:1px solid var(--cc-line);border-radius:8px;background:var(--cc-card);color:var(--cc-muted);font:700 9px inherit;text-transform:capitalize;cursor:pointer}.preset.active{background:var(--cc-soft);color:var(--cc-text);border-color:#6f6fdb}.preview{width:100%;min-height:150px;max-height:260px;resize:vertical;border:1px solid var(--cc-line);border-radius:11px;background:var(--cc-card);color:var(--cc-text);padding:10px;font:11px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;outline:none}.apply,.dashboard{width:100%;margin-top:9px;border:0;border-radius:10px;padding:10px;background:var(--cc-brand);color:#fff;font:750 11px inherit;cursor:pointer}.dashboard{background:transparent;color:var(--cc-muted);border:1px solid var(--cc-line)}
+  </style>
+  <div class="panel" hidden>
+    <div class="head"><strong>CHATCARRY</strong><button class="close" aria-label="Close">×</button></div>
+    <div class="view home"><div class="actions">
+      <button class="action primary save"><span class="icon">▣</span><span class="copy"><strong>Save context</strong><small>Capture the messages loaded on this page</small></span><span>›</span></button>
+      <button class="action load"><span class="icon">▤</span><span class="copy"><strong>Load context</strong><small>Insert one of your saved cards</small></span><span>›</span></button>
+    </div><div class="status"></div><button class="dashboard">Open full library & settings</button></div>
+    <div class="view library" hidden><button class="back">← Back</button><div class="cards"></div></div>
+    <div class="view enhancer" hidden><button class="back">← Back</button><div class="presets"><button class="preset active" data-preset="balanced">Balanced</button><button class="preset" data-preset="concise">Concise</button><button class="preset" data-preset="detailed">Detailed</button></div><textarea class="preview" aria-label="Enhanced prompt preview"></textarea><button class="apply">Replace draft with preview</button></div>
+  </div>
+  <div class="dock"><button class="orb" aria-label="Open ChatCarry"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 4.5A3.5 3.5 0 0 0 4.5 8v1.2A3.8 3.8 0 0 0 3 12.3 3.7 3.7 0 0 0 6.7 16H8m8-11.5A3.5 3.5 0 0 1 19.5 8v1.2a3.8 3.8 0 0 1 1.5 3.1 3.7 3.7 0 0 1-3.7 3.7H16M8 4.5V19m8-14.5V19M8 8h2a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2h2M16 8h-1a3 3 0 0 0-3 3"/></svg></button><button class="enhance"><span>⚡</span>Enhance prompt</button></div>`;
+
+  const panel = shadow.querySelector<HTMLElement>('.panel')!;
+  const home = shadow.querySelector<HTMLElement>('.home')!;
+  const library = shadow.querySelector<HTMLElement>('.library')!;
+  const enhancer = shadow.querySelector<HTMLElement>('.enhancer')!;
+  const status = shadow.querySelector<HTMLElement>('.status')!;
+  const preview = shadow.querySelector<HTMLTextAreaElement>('.preview')!;
+  let activePreset: 'balanced' | 'concise' | 'detailed' = 'balanced';
+  let originalPrompt = '';
+
+  const show = (view: 'home' | 'library' | 'enhancer') => {
+    panel.hidden = false; home.hidden = view !== 'home'; library.hidden = view !== 'library'; enhancer.hidden = view !== 'enhancer';
+  };
+  const setStatus = (text: string, error = false) => { status.textContent = text; status.classList.toggle('error', error); };
+  const openEnhancer = () => {
+    const element = composer();
+    if (!element) { toast('Could not find the prompt box.'); return; }
+    originalPrompt = currentValue(element);
+    if (!originalPrompt.trim()) { toast('Write a draft first, then enhance it.'); return; }
+    preview.value = enhancePrompt(originalPrompt, activePreset); show('enhancer');
+  };
+
+  shadow.querySelector<HTMLButtonElement>('.orb')!.onclick = () => panel.hidden ? show('home') : panel.hidden = true;
+  shadow.querySelector<HTMLButtonElement>('.enhance')!.onclick = openEnhancer;
+  shadow.querySelector<HTMLButtonElement>('.close')!.onclick = () => { panel.hidden = true; };
+  shadow.querySelectorAll<HTMLButtonElement>('.back').forEach((button) => button.onclick = () => show('home'));
+  shadow.querySelector<HTMLButtonElement>('.dashboard')!.onclick = () => { void chrome.runtime.sendMessage({ type: 'OPEN_PANEL', intent: 'library' }); panel.hidden = true; };
+  shadow.querySelector<HTMLButtonElement>('.save')!.onclick = async () => {
+    setStatus('Reading the loaded conversation…');
+    const captured = extract();
+    if (!captured.ok) { setStatus(captured.error.message, true); return; }
+    if (!captured.value.messages.length) { setStatus('No loaded messages were found. The site layout may have changed.', true); return; }
+    try {
+      const result = await chrome.runtime.sendMessage({ type: 'INLINE_SAVE', snapshot: captured.value });
+      if (!result?.ok) { setStatus(result?.error?.message ?? 'Could not save this context.', true); return; }
+      setStatus(result.value.duplicate ? `Already saved as “${result.value.title}”.` : `Saved “${result.value.title}” locally.`);
+    } catch { setStatus('Could not reach ChatCarry. Reload this page and try again.', true); }
+  };
+  shadow.querySelector<HTMLButtonElement>('.load')!.onclick = async () => {
+    show('library');
+    const cardsRoot = shadow.querySelector<HTMLElement>('.cards')!;
+    cardsRoot.replaceChildren();
+    const loading = document.createElement('div'); loading.className = 'empty'; loading.textContent = 'Loading your library…'; cardsRoot.append(loading);
+    try {
+      const result = await chrome.runtime.sendMessage({ type: 'INLINE_LIST_CARDS' });
+      cardsRoot.replaceChildren();
+      if (!result?.ok || !result.value.length) { const empty = document.createElement('div'); empty.className = 'empty'; empty.textContent = 'No saved context yet.'; cardsRoot.append(empty); return; }
+      for (const item of result.value as Array<{ id: string; title: string; platform: string; summary: string }>) {
+        const button = document.createElement('button'); button.className = 'card';
+        const title = document.createElement('strong'); title.textContent = item.title;
+        const summary = document.createElement('small'); summary.textContent = item.summary || `Saved from ${item.platform}`;
+        button.append(title, summary);
+        button.onclick = async () => {
+          button.textContent = 'Preparing context…';
+          const card = await chrome.runtime.sendMessage({ type: 'INLINE_GET_CARD', cardId: item.id });
+          if (!card?.ok) { toast(card?.error?.message ?? 'Could not load that card.'); return; }
+          insertIntoComposer(card.value.text, 'prepend'); panel.hidden = true;
+        };
+        cardsRoot.append(button);
+      }
+    } catch { cardsRoot.textContent = 'Could not load the library.'; }
+  };
+  shadow.querySelectorAll<HTMLButtonElement>('.preset').forEach((button) => button.onclick = () => {
+    activePreset = button.dataset.preset as typeof activePreset;
+    shadow.querySelectorAll('.preset').forEach((item) => item.classList.toggle('active', item === button));
+    preview.value = enhancePrompt(originalPrompt, activePreset);
   });
+  shadow.querySelector<HTMLButtonElement>('.apply')!.onclick = () => { insertIntoComposer(preview.value, 'replace'); panel.hidden = true; };
+
+  const position = () => {
+    const element = composer();
+    if (!element) { host.style.opacity = '0'; return; }
+    const rect = element.getBoundingClientRect();
+    const width = Math.min(360, Math.max(250, rect.width));
+    const left = Math.max(12, Math.min(window.innerWidth - width - 12, rect.right - width));
+    const below = rect.bottom + 11;
+    const top = below + 55 < window.innerHeight ? below : Math.max(12, rect.top - 58);
+    host.style.width = `${width}px`; host.style.left = `${left}px`; host.style.top = `${top}px`; host.style.opacity = '1';
+    const rgb = getComputedStyle(document.body).backgroundColor.match(/\d+/g)?.map(Number) ?? [255, 255, 255];
+    host.dataset.theme = ((rgb[0] ?? 255) + (rgb[1] ?? 255) + (rgb[2] ?? 255)) / 3 > 145 ? 'light' : 'dark';
+  };
   document.documentElement.append(host);
+  position();
+  window.addEventListener('resize', position, { passive: true });
+  window.addEventListener('scroll', position, { passive: true, capture: true });
+  window.setInterval(position, 900);
 }
 
 export default defineUnlistedScript(() => {
@@ -122,16 +234,7 @@ export default defineUnlistedScript(() => {
       return;
     }
     if (message.type === 'INSERT_TEXT') {
-      const element = composer();
-      if (!element) { sendResponse(fail('INSERT_FAILED', 'Could not find the prompt box.')); return; }
-      const original = currentValue(element);
-      previousDraft = { element, value: original, isInput: element instanceof HTMLTextAreaElement };
-      const separator = original.trim() ? '\n\n---\n\n' : '';
-      setValue(element, message.mode === 'replace' ? message.text : `${message.text}${separator}${original}`);
-      if (undoTimer) clearTimeout(undoTimer);
-      undoTimer = window.setTimeout(() => { previousDraft = null; }, 10_000);
-      toast('Context inserted — review before sending.', true);
-      sendResponse({ ok: true, value: { inserted: true } });
+      sendResponse(insertIntoComposer(message.text, message.mode));
       return;
     }
     if (message.type === 'UNDO_INSERT') {

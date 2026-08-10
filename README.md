@@ -11,6 +11,7 @@ ChatCarry is a free, local-first Chromium extension that turns a loaded ChatGPT,
 - Local IndexedDB library with normalized search and duplicate detection
 - Preview, character budget, prepend/replace choice, and a 10-second Undo
 - Inline Save / Load / Enhance dock on supported AI sites
+- In-page popover anchored beside the prompt box; the side panel is reserved for the full library and settings
 - Offline prompt presets: Balanced, Concise, and Detailed
 - Checksummed JSON backup and transactional merge import
 - Advisory warnings for common secrets and personal contact data

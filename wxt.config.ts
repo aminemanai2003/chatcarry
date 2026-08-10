@@ -10,6 +10,7 @@ export default defineConfig({
     permissions: ['storage', 'sidePanel', 'scripting'],
     optional_host_permissions: [
       'https://chatgpt.com/*',
+      'https://chat.openai.com/*',
       'https://claude.ai/*',
       'https://gemini.google.com/*'
     ],
