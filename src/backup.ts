@@ -25,7 +25,7 @@ export async function createBackup(includeTranscripts = false): Promise<string> 
   };
   const envelope = {
     schemaVersion: 1 as const,
-    appVersion: '0.2.1',
+    appVersion: '0.2.2',
     exportedAt: new Date().toISOString(),
     includeTranscripts,
     payload
