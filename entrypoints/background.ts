@@ -2,7 +2,7 @@ import { browser } from 'wxt/browser';
 import { buildSections, formatContext, titleFromSnapshot } from '../src/context-engine';
 import { db } from '../src/db';
 import { sha256 } from '../src/hash';
-import { platformFromUrl } from '../src/platforms';
+import { originPattern, platformFromUrl } from '../src/platforms';
 import { ConversationSnapshotSchema, type ContextCard, type PanelIntent } from '../src/types';
 
 type RuntimeMessage =
@@ -45,6 +45,15 @@ async function injectBridge(tabId: number) {
 export default defineBackground(() => {
   browser.runtime.onInstalled.addListener(() => {
     void browser.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+  });
+
+  browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (changeInfo.status !== 'complete' || !tab.url) return;
+    const platform = platformFromUrl(tab.url);
+    if (!platform) return;
+    void browser.permissions.contains({ origins: [originPattern(platform, tab.url)] }).then((allowed) => {
+      if (allowed) return injectBridge(tabId);
+    });
   });
 
   browser.runtime.onMessage.addListener((message: RuntimeMessage, sender) => {

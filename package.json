@@ -1,6 +1,6 @@
 {
   "name": "chatcarry",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "type": "module",
   "description": "Carry context between ChatGPT, Claude, and Gemini without a server.",
